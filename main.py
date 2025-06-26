@@ -1,50 +1,95 @@
-# main.py
-
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import logging
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials
 import requests
+import os
 
-# Import model functions
-from models import openai_gpt, anthropic_claude, google_gemini
+# ----------- Logging Setup -----------
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
+
+logger = logging.getLogger(__name__)
+# --------------------------------------
 
 app = FastAPI()
 
-# Load Google Sheet
-def load_sheet():
-    scope = [
-        "https://spreadsheets.google.com/feeds",
-        "https://www.googleapis.com/auth/drive"
-    ]
-    creds = ServiceAccountCredentials.from_json_keyfile_name("google-creds.json", scope)
-    client = gspread.authorize(creds)
-    sheet = client.open("ai_models_configurations").sheet1
-    return sheet.get_all_records()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Update to restrict domains if needed
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# Request body
+# Load Google Sheet
+def get_model_config():
+    try:
+        credentials = Credentials.from_service_account_file("service_account.json")
+        client = gspread.authorize(credentials)
+        sheet = client.open("ai_models_configurations").sheet1
+        data = sheet.get_all_records()
+        logger.info("Successfully loaded model configurations from Google Sheet")
+        return data
+    except Exception as e:
+        logger.error(f"Error loading Google Sheet: {e}")
+        raise
+
 class AIRequest(BaseModel):
     model: str
     prompt: str
 
+@app.get("/")
+def root():
+    logger.info("Health check endpoint called")
+    return {"status": "AI Playground is live"}
+
+@app.get("/models")
+def list_models():
+    data = get_model_config()
+    model_names = [row["model"] for row in data]
+    logger.info(f"Model list returned: {model_names}")
+    return {"models": model_names}
+
 @app.post("/ask-ai")
-async def ask_ai(req: AIRequest):
-    records = load_sheet()
-    selected = next((r for r in records if r["Model Name"] == req.model), None)
+def ask_ai(request: AIRequest):
+    logger.info(f"Received prompt for model: {request.model}")
+    config = get_model_config()
+    selected = next((item for item in config if item["model"] == request.model), None)
+
     if not selected:
-        return {"error": "Model not found"}
+        logger.warning(f"Model '{request.model}' not found in config")
+        return {"error": f"Model '{request.model}' not found"}
 
-    api_url = selected["API URL"]
-    api_key = selected["API Key"]
-    model_param = selected["Model Parameter"]
+    try:
+        # Assume API is OpenAI compatible
+        url = selected["api_endpoint"]
+        api_key = selected["api_key"]
+        logger.info(f"Calling endpoint: {url}")
 
-    if "openai.com" in api_url:
-        reply = openai_gpt.ask_gpt(api_key, model_param, req.prompt)
-    elif "anthropic.com" in api_url:
-        reply = anthropic_claude.ask_claude(api_key, model_param, req.prompt)
-    elif "googleapis.com" in api_url:
-        reply = google_gemini.ask_gemini(api_key, model_param, req.prompt)
-    else:
-        reply = "Unsupported API."
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": selected["model"],
+            "messages": [
+                {"role": "user", "content": request.prompt}
+            ]
+        }
 
-    return {"response": reply}
+        response = requests.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        result = response.json()
+
+        ai_reply = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+        logger.info(f"AI response: {ai_reply[:100]}...")  # log first 100 chars
+
+        return {"response": ai_reply}
+    except Exception as e:
+        logger.error(f"API call failed: {e}")
+        return {"error": str(e)}
