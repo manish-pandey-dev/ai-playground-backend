@@ -9,26 +9,32 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Google Cloud SDK
-      uses: google-github-actions/setup-gcloud@v1
-      with:
-        service_account_key: ${{ secrets.GCLOUD_SA_KEY }}
-        project_id: ${{ secrets.GCLOUD_PROJECT }}
-        export_default_credentials: true
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GCLOUD_SA_KEY }}'
 
-    - name: Build and push Docker image
-      run: |
-        docker build -t gcr.io/${{ secrets.GCLOUD_PROJECT }}/${{ secrets.GCLOUD_SERVICE }} .
-        docker push gcr.io/${{ secrets.GCLOUD_PROJECT }}/${{ secrets.GCLOUD_SERVICE }}
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCLOUD_PROJECT }}
 
-    - name: Deploy to Cloud Run
-      run: |
-        gcloud run deploy ${{ secrets.GCLOUD_SERVICE }} \
-          --image gcr.io/${{ secrets.GCLOUD_PROJECT }}/${{ secrets.GCLOUD_SERVICE }} \
-          --region ${{ secrets.GCLOUD_REGION }} \
-          --platform managed \
-          --allow-unauthenticated
+      - name: Build and push Docker image
+        run: |
+          gcloud builds submit --tag gcr.io/${{ secrets.GCLOUD_PROJECT }}/ai-playground
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ secrets.SERVICE_NAME }} \
+            --image gcr.io/${{ secrets.GCLOUD_PROJECT }}/ai-playground \
+            --region europe-west4 \
+            --platform managed \
+            --allow-unauthenticated
