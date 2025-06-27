@@ -37,4 +37,5 @@ jobs:
             --image gcr.io/${{ secrets.GCLOUD_PROJECT }}/ai-playground \
             --region ${{ secrets.GCLOUD_REGION }} \
             --platform managed \
-            --allow-unauthenticated
+            --allow-unauthenticated \
+            --set-env-vars GOOGLE_CREDENTIALS_JSON='${{ secrets.GCLOUD_SA_KEY }}'
