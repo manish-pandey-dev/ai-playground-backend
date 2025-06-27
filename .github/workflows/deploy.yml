@@ -38,4 +38,4 @@ jobs:
             --region ${{ secrets.GCLOUD_REGION }} \
             --platform managed \
             --allow-unauthenticated \
-            --set-env-vars GOOGLE_CREDENTIALS_JSON='${{ secrets.GCLOUD_SA_KEY }}'
+            --set-env-vars GOOGLE_CREDENTIALS_JSON="${{ secrets.GCLOUD_SA_KEY }}"
