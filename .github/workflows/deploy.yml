@@ -31,11 +31,6 @@ jobs:
         run: |
           gcloud builds submit --tag gcr.io/${{ secrets.GCLOUD_PROJECT }}/ai-playground
 
-      - name: Write service account JSON to .env.yaml
-        run: |
-          echo "GOOGLE_CREDENTIALS_JSON: |" > .env.yaml
-          echo "${{ secrets.GCLOUD_SA_KEY }}" | sed 's/^/  /' >> .env.yaml
-
       - name: Deploy to Cloud Run
         run: |
           gcloud run deploy ${{ secrets.GCLOUD_SERVICE }} \
@@ -43,4 +38,4 @@ jobs:
             --region ${{ secrets.GCLOUD_REGION }} \
             --platform managed \
             --allow-unauthenticated \
-            --env-vars-file .env.yaml
+            --set-env-vars GOOGLE_CREDENTIALS_JSON='${{ secrets.GCLOUD_SA_KEY }}'
