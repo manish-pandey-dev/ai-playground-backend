@@ -6,13 +6,13 @@ import gspread
 from google.oauth2.service_account import Credentials
 import requests
 import os
+import json
 
 # ----------- Logging Setup -----------
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
-
 logger = logging.getLogger(__name__)
 # --------------------------------------
 
@@ -29,7 +29,11 @@ app.add_middleware(
 # Load Google Sheet
 def get_model_config():
     try:
-        credentials = Credentials.from_service_account_file("service_account.json")
+        credentials_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
+        if not credentials_json:
+            raise Exception("GOOGLE_CREDENTIALS_JSON environment variable not set")
+
+        credentials = Credentials.from_service_account_info(json.loads(credentials_json))
         client = gspread.authorize(credentials)
         sheet = client.open("ai_models_configurations").sheet1
         data = sheet.get_all_records()
@@ -66,7 +70,6 @@ def ask_ai(request: AIRequest):
         return {"error": f"Model '{request.model}' not found"}
 
     try:
-        # Assume API is OpenAI compatible
         url = selected["api_endpoint"]
         api_key = selected["api_key"]
         logger.info(f"Calling endpoint: {url}")
@@ -87,7 +90,7 @@ def ask_ai(request: AIRequest):
         result = response.json()
 
         ai_reply = result.get("choices", [{}])[0].get("message", {}).get("content", "")
-        logger.info(f"AI response: {ai_reply[:100]}...")  # log first 100 chars
+        logger.info(f"AI response: {ai_reply[:100]}...")
 
         return {"response": ai_reply}
     except Exception as e:
