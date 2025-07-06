@@ -62,6 +62,7 @@ def list_models():
 @app.post("/ask-ai")
 def ask_ai(request: AIRequest):
     logger.info(f"Received prompt for model: {request.model}")
+    logger.info(f"Received prompt for model: {request.prompt}")
     config = get_model_config()
     selected = next((item for item in config if item["model"] == request.model), None)
 
