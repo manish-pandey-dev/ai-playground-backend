@@ -26,22 +26,38 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Load Google Sheet
+# Load Google Sheet with detailed logging
 def get_model_config():
     try:
+        logger.info("Starting to load GOOGLE_CREDENTIALS_JSON from environment variable...")
         credentials_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
         if not credentials_json:
+            logger.error("GOOGLE_CREDENTIALS_JSON not found in environment variables.")
             raise Exception("GOOGLE_CREDENTIALS_JSON environment variable not set")
+        logger.info("GOOGLE_CREDENTIALS_JSON successfully retrieved.")
 
+        logger.info("Parsing credentials JSON...")
         credentials = Credentials.from_service_account_info(json.loads(credentials_json))
+        logger.info("Credentials parsed and service account authenticated.")
+
+        logger.info("Authorizing gspread client...")
         client = gspread.authorize(credentials)
+        logger.info("gspread client authorized successfully.")
+
+        logger.info("Opening Google Sheet: ai_models_configurations")
         sheet = client.open("ai_models_configurations").sheet1
+        logger.info("Sheet opened successfully. Fetching all records...")
+
         data = sheet.get_all_records()
-        logger.info("Successfully loaded model configurations from Google Sheet")
+        logger.info(f"Retrieved {len(data)} rows from the sheet.")
+
+        logger.info("Successfully loaded model configurations from Google Sheet.")
         return data
+
     except Exception as e:
         logger.error(f"Error loading Google Sheet: {e}")
         raise
+
 
 class AIRequest(BaseModel):
     model: str
