@@ -26,6 +26,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # Load Google Sheet with detailed logging
 def get_model_config():
     try:
@@ -74,33 +75,48 @@ class AIRequest(BaseModel):
     model: str
     prompt: str
 
+
 @app.get("/")
 def root():
     logger.info("Health check endpoint called")
     return {"status": "AI Playground is live"}
 
+
 @app.get("/models")
 def list_models():
-    data = get_model_config()
-    model_names = [row["model"] for row in data]
-    logger.info(f"Model list returned: {model_names}")
-    return {"models": model_names}
+    try:
+        logger.info("Loading model configurations for /models endpoint...")
+        data = get_model_config()
+        model_names = [row["model"] for row in data]
+        logger.info(f"Model list returned: {model_names}")
+        return {"models": model_names}
+    except Exception as e:
+        logger.error(f"Error in /models endpoint: {str(e)}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        return {"error": f"Failed to load models: {str(e)}"}
+
 
 @app.post("/ask-ai")
 def ask_ai(request: AIRequest):
-    logger.info(f"Received prompt for model: {request.model}")
-    logger.info(f"Received prompt for model: {request.prompt}")
-    config = get_model_config()
-    selected = next((item for item in config if item["model"] == request.model), None)
-
-    if not selected:
-        logger.warning(f"Model '{request.model}' not found in config")
-        return {"error": f"Model '{request.model}' not found"}
-
     try:
+        logger.info(f"Received request for model: {request.model}")
+        logger.info(f"Received prompt: {request.prompt}")
+
+        logger.info("Loading model configuration...")
+        config = get_model_config()
+        logger.info(f"Successfully loaded {len(config)} model configurations")
+
+        selected = next((item for item in config if item["model"] == request.model), None)
+
+        if not selected:
+            logger.warning(f"Model '{request.model}' not found in config")
+            return {"error": f"Model '{request.model}' not found"}
+
         url = selected["api_endpoint"]
         api_key = selected["api_key"]
-        logger.info(f"Calling endpoint: {url}")
+        logger.info(f"Using endpoint: {url}")
+        logger.info(f"API key starts with: {api_key[:10]}..." if api_key else "No API key found")
 
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -113,14 +129,27 @@ def ask_ai(request: AIRequest):
             ]
         }
 
-        response = requests.post(url, json=payload, headers=headers)
+        logger.info("Making API request...")
+        response = requests.post(url, json=payload, headers=headers, timeout=30)
+        logger.info(f"API response status: {response.status_code}")
+
         response.raise_for_status()
         result = response.json()
 
         ai_reply = result.get("choices", [{}])[0].get("message", {}).get("content", "")
-        logger.info(f"AI response: {ai_reply[:100]}...")
+        logger.info(f"AI response received successfully. Length: {len(ai_reply)} characters")
 
         return {"response": ai_reply}
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"API request failed: {str(e)}")
+        return {"error": f"API request failed: {str(e)}"}
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON parsing error: {str(e)}")
+        return {"error": f"Invalid JSON response from API: {str(e)}"}
     except Exception as e:
-        logger.error(f"API call failed: {e}")
-        return {"error": str(e)}
+        logger.error(f"Unexpected error in ask_ai: {str(e)}")
+        logger.error(f"Error type: {type(e).__name__}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        return {"error": f"Internal server error: {str(e)}"}
