@@ -37,8 +37,19 @@ def get_model_config():
         logger.info("GOOGLE_CREDENTIALS_JSON successfully retrieved.")
 
         logger.info("Parsing credentials JSON...")
-        credentials = Credentials.from_service_account_info(json.loads(credentials_json))
-        logger.info("Credentials parsed and service account authenticated.")
+        creds_dict = json.loads(credentials_json)
+        logger.info("Credentials JSON parsed successfully.")
+
+        # Define the required scopes for Google Sheets access
+        scopes = [
+            'https://www.googleapis.com/auth/spreadsheets.readonly',
+            'https://www.googleapis.com/auth/drive.readonly'
+        ]
+        logger.info(f"Using scopes: {scopes}")
+
+        # Create credentials with the proper scopes
+        credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+        logger.info("Credentials created with proper scopes.")
 
         logger.info("Authorizing gspread client...")
         client = gspread.authorize(credentials)
