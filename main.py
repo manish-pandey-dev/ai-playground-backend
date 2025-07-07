@@ -37,8 +37,8 @@ app.add_middleware(
 # Rate limiting storage (in production, use Redis or database)
 request_counts = defaultdict(list)
 daily_request_count = 0
-MAX_REQUESTS_PER_IP_PER_HOUR = 10  # Limit per IP
-MAX_DAILY_REQUESTS = 100  # Total daily limit for your app
+MAX_REQUESTS_PER_IP_PER_HOUR = 100  # Limit per IP
+MAX_DAILY_REQUESTS = 1000  # Total daily limit for your app
 MAX_TOKENS_PER_REQUEST = 4000  # Prevent very expensive requests
 
 
