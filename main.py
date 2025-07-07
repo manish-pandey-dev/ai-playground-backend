@@ -11,6 +11,11 @@ import time
 from collections import defaultdict
 from datetime import datetime, timedelta
 
+# Import your AI model modules
+from models.anthropic_claude import ask_claude
+from models.google_gemini import ask_gemini
+from models.openai_gpt import ask_gpt
+
 # ----------- Logging Setup -----------
 logging.basicConfig(
     level=logging.INFO,
@@ -64,6 +69,22 @@ def check_rate_limit(client_ip: str):
     # Record this request
     request_counts[client_ip].append(now)
     daily_request_count += 1
+
+
+def is_claude_model(model_name):
+    """Check if model is a Claude model"""
+    return model_name.startswith('claude-')
+
+
+def is_gemini_model(model_name):
+    """Check if model is a Gemini model"""
+    return model_name.startswith('gemini-')
+
+
+def is_openai_model(model_name):
+    """Check if model is an OpenAI model"""
+    openai_models = ['gpt-3.5-turbo', 'gpt-4', 'gpt-4-turbo', 'gpt-4o']
+    return model_name in openai_models or model_name.startswith('gpt-')
 
 
 # Load Google Sheet with detailed logging
@@ -208,55 +229,56 @@ def ask_ai(request: AIRequest, client_request: Request):
             logger.warning(f"Model '{request.model}' not found in config")
             return {"error": f"Model '{request.model}' not found"}
 
-        url = selected["api_endpoint"]
         api_key = selected["api_key"]
-        logger.info(f"Using endpoint: {url}")
         logger.info(f"API key starts with: {api_key[:10]}..." if api_key else "No API key found")
 
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "model": selected["model"],
-            "messages": [
-                {"role": "user", "content": request.prompt}
-            ],
-            "max_tokens": min(request.max_tokens, MAX_TOKENS_PER_REQUEST),  # Enforce limit
-            "temperature": 0.7
-        }
+        # Route to appropriate AI service based on model type
+        try:
+            if is_claude_model(request.model):
+                logger.info("Using Claude API")
+                ai_response = ask_claude(
+                    api_key=api_key,
+                    model_param=request.model,
+                    prompt=request.prompt
+                )
+            elif is_gemini_model(request.model):
+                logger.info("Using Gemini API")
+                ai_response = ask_gemini(
+                    api_key=api_key,
+                    model_param=request.model,
+                    prompt=request.prompt
+                )
+            elif is_openai_model(request.model):
+                logger.info("Using OpenAI API")
+                ai_response = ask_gpt(
+                    api_key=api_key,
+                    model_param=request.model,
+                    prompt=request.prompt
+                )
+            else:
+                logger.warning(f"Unknown model type: {request.model}")
+                return {"error": f"Unsupported model type: {request.model}"}
 
-        logger.info("Making API request...")
-        response = requests.post(url, json=payload, headers=headers, timeout=30)
-        logger.info(f"API response status: {response.status_code}")
+            logger.info(f"AI response received successfully. Length: {len(ai_response)} characters")
 
-        # Check for quota errors specifically
-        if response.status_code == 429:
-            error_detail = response.json().get("error", {})
-            if "quota" in error_detail.get("message", "").lower():
-                logger.error("OpenAI quota exceeded - API spending limit reached")
+            return {
+                "response": ai_response,
+                "model_used": request.model,
+                "daily_requests_remaining": MAX_DAILY_REQUESTS - daily_request_count
+            }
+
+        except requests.exceptions.RequestException as api_error:
+            logger.error(f"AI API call failed: {str(api_error)}")
+
+            # Check for quota/rate limit errors
+            error_msg = str(api_error).lower()
+            if "quota" in error_msg or "rate limit" in error_msg or "429" in error_msg:
                 return {"error": "Service temporarily unavailable due to usage limits. Please try again later."}
-
-        response.raise_for_status()
-        result = response.json()
-
-        ai_reply = result.get("choices", [{}])[0].get("message", {}).get("content", "")
-        logger.info(f"AI response received successfully. Length: {len(ai_reply)} characters")
-
-        return {
-            "response": ai_reply,
-            "model_used": request.model,
-            "daily_requests_remaining": MAX_DAILY_REQUESTS - daily_request_count
-        }
+            else:
+                return {"error": "AI service temporarily unavailable. Please try again later."}
 
     except HTTPException:
         raise  # Re-raise HTTP exceptions (like rate limits)
-    except requests.exceptions.RequestException as e:
-        logger.error(f"API request failed: {str(e)}")
-        return {"error": "AI service temporarily unavailable. Please try again later."}
-    except json.JSONDecodeError as e:
-        logger.error(f"JSON parsing error: {str(e)}")
-        return {"error": "Invalid response from AI service."}
     except Exception as e:
         logger.error(f"Unexpected error in ask_ai: {str(e)}")
         logger.error(f"Error type: {type(e).__name__}")
@@ -273,4 +295,15 @@ def get_stats():
         "daily_requests_remaining": MAX_DAILY_REQUESTS - daily_request_count,
         "rate_limit_per_ip_per_hour": MAX_REQUESTS_PER_IP_PER_HOUR,
         "max_tokens_per_request": MAX_TOKENS_PER_REQUEST
+    }
+
+
+@app.get("/supported-models")
+def get_supported_models():
+    """Get information about supported AI models"""
+    return {
+        "claude_models": ["claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229"],
+        "openai_models": ["gpt-3.5-turbo", "gpt-4", "gpt-4-turbo", "gpt-4o"],
+        "gemini_models": ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-1.0-pro"],
+        "note": "Add these models to your Google Sheet with appropriate API keys"
     }
