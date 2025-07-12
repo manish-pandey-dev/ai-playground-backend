@@ -18,6 +18,7 @@ from models.openai_gpt import ask_gpt
 from models.deepseek import ask_deepseek
 from models.mistral import ask_mistral
 from models.grok import ask_grok
+from health_checker import run_api_health_check
 
 # ----------- Logging Setup -----------
 logging.basicConfig(
@@ -332,6 +333,50 @@ def get_stats():
         "max_tokens_per_request": MAX_TOKENS_PER_REQUEST
     }
 
+
+@app.get("/health-check")
+def api_health_check():
+    """
+    Run comprehensive health check on all configured AI models
+    Returns status of each model with success/failure indicators
+    """
+    try:
+        logger.info("🔍 API Health Check requested")
+        
+        # Run the health check
+        health_results = run_api_health_check()
+        
+        if not health_results["success"]:
+            logger.error("Health check failed to complete")
+            return {
+                "success": False,
+                "error": health_results.get("error", "Health check failed"),
+                "results": [],
+                "summary": {}
+            }
+        
+        results = health_results["results"]
+        summary = health_results["summary"]
+        
+        logger.info(f"Health check completed: {summary['successful']}/{summary['total_models']} models working")
+        
+        return {
+            "success": True,
+            "results": results,
+            "summary": summary,
+            "message": f"Health check completed: {summary['success_rate']}% models operational"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error during health check: {str(e)}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        return {
+            "success": False,
+            "error": f"Health check failed: {str(e)}",
+            "results": [],
+            "summary": {}
+        }
 
 @app.get("/supported-models")
 def get_supported_models():
