@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 from models.anthropic_claude import ask_claude
 from models.google_gemini import ask_gemini
 from models.openai_gpt import ask_gpt
+from models.deepseek import ask_deepseek
 
 # ----------- Logging Setup -----------
 logging.basicConfig(
@@ -86,6 +87,9 @@ def is_openai_model(model_name):
     openai_models = ['gpt-3.5-turbo', 'gpt-4', 'gpt-4-turbo', 'gpt-4o']
     return model_name in openai_models or model_name.startswith('gpt-')
 
+def is_deepseek_model(model_name):
+    """Check if model is a DeepSeek model"""
+    return model_name.startswith('deepseek-')
 
 # Load Google Sheet with detailed logging
 def get_model_config():
@@ -255,6 +259,13 @@ def ask_ai(request: AIRequest, client_request: Request):
                     model_param=request.model,
                     prompt=request.prompt
                 )
+            elif is_deepseek_model(request.model):
+                logger.info("Using DeepSeek API")
+                ai_response = ask_deepseek(
+                    api_key=api_key,
+                    model_param=request.model,
+                    prompt=request.prompt
+                )
             else:
                 logger.warning(f"Unknown model type: {request.model}")
                 return {"error": f"Unsupported model type: {request.model}"}
@@ -303,7 +314,8 @@ def get_supported_models():
     """Get information about supported AI models"""
     return {
         "claude_models": ["claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229"],
-        "openai_models": ["gpt-3.5-turbo", "gpt-4", "gpt-4-turbo", "gpt-4o"],
+        "openai_models": ["gpt-3.5-turbo", "gpt-4", "gpt-4-turbo", "gpt-4o", "gpt-4o-mini"],
         "gemini_models": ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-1.0-pro"],
+        "deepseek_models": ["deepseek-chat", "deepseek-coder", "deepseek-reasoner"],
         "note": "Add these models to your Google Sheet with appropriate API keys"
     }
