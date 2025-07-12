@@ -16,6 +16,7 @@ from models.anthropic_claude import ask_claude
 from models.google_gemini import ask_gemini
 from models.openai_gpt import ask_gpt
 from models.deepseek import ask_deepseek
+from models.mistral import ask_mistral
 
 # ----------- Logging Setup -----------
 logging.basicConfig(
@@ -90,6 +91,10 @@ def is_openai_model(model_name):
 def is_deepseek_model(model_name):
     """Check if model is a DeepSeek model"""
     return model_name.startswith('deepseek-')
+
+def is_mistral_model(model_name):
+    """Check if model is a Mistral model"""
+    return model_name.startswith('mistral-') or model_name.startswith('mixtral-')
 
 # Load Google Sheet with detailed logging
 def get_model_config():
@@ -266,6 +271,13 @@ def ask_ai(request: AIRequest, client_request: Request):
                     model_param=request.model,
                     prompt=request.prompt
                 )
+            elif is_mistral_model(request.model):
+                logger.info("Using Mistral API")
+                ai_response = ask_mistral(
+                    api_key=api_key,
+                    model_param=request.model,
+                    prompt=request.prompt
+                )    
             else:
                 logger.warning(f"Unknown model type: {request.model}")
                 return {"error": f"Unsupported model type: {request.model}"}
@@ -317,5 +329,6 @@ def get_supported_models():
         "openai_models": ["gpt-3.5-turbo", "gpt-4", "gpt-4-turbo", "gpt-4o", "gpt-4o-mini"],
         "gemini_models": ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-1.0-pro"],
         "deepseek_models": ["deepseek-chat", "deepseek-coder", "deepseek-reasoner"],
+        "mistral_models": ["mistral-large-latest", "mistral-small-latest", "mixtral-8x7b-instruct"],  # NEW        
         "note": "Add these models to your Google Sheet with appropriate API keys"
     }
