@@ -75,7 +75,14 @@ class APIHealthChecker:
         return model_name.startswith('grok-')
 
     def is_huggingface_model(self, model_name):
-        return "/" in model_name  # HF models use format like "meta-llama/Llama-2-7b-chat-hf"
+        working_models = [
+            'gpt2',  # Text generation
+            'distilbert-base-uncased-finetuned-sst-2-english',  # Sentiment analysis
+            'facebook/bart-large-cnn',  # Summarization
+            'bert-base-uncased',  # Fill-mask
+            'google/gemma-2-2b-it'  # Chat/Instruct model
+        ]
+        return model_name in working_models or "/" in model_name
 
     def test_single_model(self, model_name: str, api_key: str) -> Dict[str, Any]:
         """Test a single model and return results"""

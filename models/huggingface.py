@@ -13,7 +13,7 @@ def ask_huggingface(api_key, model_param, prompt, max_tokens=150):
 
     Args:
         api_key (str): Hugging Face API key (free tier available)
-        model_param (str): Model name (e.g., 'meta-llama/Llama-2-7b-chat-hf')
+        model_param (str): Model name (e.g., 'gpt2', 'facebook/bart-large-cnn')
         prompt (str): User prompt
         max_tokens (int): Maximum tokens in response
 
@@ -32,24 +32,72 @@ def ask_huggingface(api_key, model_param, prompt, max_tokens=150):
         "Content-Type": "application/json"
     }
 
-    # Format prompt for chat models
-    if "chat" in model_param.lower() or "instruct" in model_param.lower():
-        formatted_prompt = f"<|user|>\n{prompt}\n<|assistant|>\n"
-    else:
+    # Format prompt based on model type
+    if "gpt2" in model_param.lower():
+        # GPT-2 style text generation
         formatted_prompt = prompt
-
-    payload = {
-        "inputs": formatted_prompt,
-        "parameters": {
-            "max_new_tokens": max_tokens,
-            "temperature": 0.7,
-            "do_sample": True,
-            "return_full_text": False
-        },
-        "options": {
-            "wait_for_model": True,
-            "use_cache": False
+        payload = {
+            "inputs": formatted_prompt,
+            "parameters": {
+                "max_new_tokens": max_tokens,
+                "temperature": 0.7,
+                "do_sample": True,
+                "return_full_text": False
+            }
         }
+    elif "distilbert-base-uncased-finetuned-sst-2-english" == model_param:
+        # Sentiment analysis model
+        formatted_prompt = prompt
+        payload = {
+            "inputs": formatted_prompt
+        }
+    elif "bart" in model_param.lower():
+        # Summarization model
+        payload = {
+            "inputs": prompt,
+            "parameters": {
+                "max_length": max_tokens,
+                "min_length": 10,
+                "do_sample": False
+            }
+        }
+    elif "bert-base-uncased" == model_param:
+        # Fill-mask model - add [MASK] if not present
+        if "[MASK]" not in prompt:
+            formatted_prompt = f"{prompt} [MASK]."
+        else:
+            formatted_prompt = prompt
+        payload = {
+            "inputs": formatted_prompt
+        }
+    elif "gemma" in model_param.lower():
+        # Google Gemma chat model
+        formatted_prompt = prompt
+        payload = {
+            "inputs": formatted_prompt,
+            "parameters": {
+                "max_new_tokens": max_tokens,
+                "temperature": 0.7,
+                "do_sample": True,
+                "return_full_text": False
+            }
+        }
+    else:
+        # Default format for other models
+        formatted_prompt = prompt
+        payload = {
+            "inputs": formatted_prompt,
+            "parameters": {
+                "max_new_tokens": max_tokens,
+                "temperature": 0.7,
+                "do_sample": True,
+                "return_full_text": False
+            }
+        }
+
+    payload["options"] = {
+        "wait_for_model": True,
+        "use_cache": False
     }
 
     try:
@@ -89,25 +137,38 @@ def ask_huggingface(api_key, model_param, prompt, max_tokens=150):
         response.raise_for_status()
         result = response.json()
 
-        # Handle different response formats
+        # Handle different response formats based on model type
         if isinstance(result, list) and len(result) > 0:
-            if isinstance(result[0], dict):
-                # Standard text generation response
-                response_text = result[0].get("generated_text", "")
+            first_result = result[0]
+
+            if isinstance(first_result, dict):
+                # Text generation models
+                if "generated_text" in first_result:
+                    response_text = first_result["generated_text"]
+                # Sentiment analysis models
+                elif "label" in first_result and "score" in first_result:
+                    response_text = f"Sentiment: {first_result['label']} (confidence: {first_result['score']:.2f})"
+                # Summarization models
+                elif "summary_text" in first_result:
+                    response_text = first_result["summary_text"]
+                # Fill-mask models
+                elif "token_str" in first_result:
+                    response_text = f"Suggested word: {first_result['token_str']} (score: {first_result['score']:.3f})"
+                else:
+                    response_text = str(first_result)
             else:
-                # Some models return different formats
-                response_text = str(result[0])
+                response_text = str(first_result)
         elif isinstance(result, dict):
             # Some models return dict format
-            response_text = result.get("generated_text", result.get("text", ""))
+            response_text = result.get("generated_text", result.get("text", str(result)))
         else:
             response_text = str(result)
 
         # Clean up the response
         response_text = response_text.strip()
 
-        # Remove the original prompt if it's included
-        if response_text.startswith(formatted_prompt):
+        # Remove the original prompt if it's included (for text generation)
+        if hasattr(locals(), 'formatted_prompt') and response_text.startswith(formatted_prompt):
             response_text = response_text[len(formatted_prompt):].strip()
 
         if response_text:
@@ -130,28 +191,22 @@ def ask_huggingface(api_key, model_param, prompt, max_tokens=150):
 
 def is_huggingface_model(model_name):
     """Check if model is a Hugging Face model"""
-    huggingface_models = [
-        'microsoft/DialoGPT-medium',
-        'HuggingFaceH4/zephyr-7b-beta',
-        'microsoft/Phi-3-mini-4k-instruct',
-        'Qwen/Qwen1.5-7B-Chat',
-        'bigscience/bloom-560m',
-        'facebook/blenderbot-400M-distill',
-        'EleutherAI/gpt-neo-1.3B',
-        'google/flan-t5-base'
+    working_models = [
+        'gpt2',  # Text generation
+        'distilbert-base-uncased-finetuned-sst-2-english',  # Sentiment analysis
+        'facebook/bart-large-cnn',  # Summarization
+        'bert-base-uncased',  # Fill-mask
+        'google/gemma-2-2b-it'  # Chat/Instruct model
     ]
-    return model_name in huggingface_models or "/" in model_name
+    return model_name in working_models or "/" in model_name
 
 
 def get_huggingface_models():
-    """Get list of popular Hugging Face models that work with Inference API"""
+    """Get list of working Hugging Face models for text generation and classification"""
     return [
-        'microsoft/DialoGPT-medium',
-        'HuggingFaceH4/zephyr-7b-beta',
-        'microsoft/Phi-3-mini-4k-instruct',
-        'Qwen/Qwen1.5-7B-Chat',
-        'bigscience/bloom-560m',
-        'facebook/blenderbot-400M-distill',
-        'EleutherAI/gpt-neo-1.3B',
-        'google/flan-t5-base'
+        'gpt2',  # Text generation
+        'distilbert-base-uncased-finetuned-sst-2-english',  # Sentiment analysis
+        'facebook/bart-large-cnn',  # Summarization
+        'bert-base-uncased',  # Fill-mask
+        'google/gemma-2-2b-it'  # Chat/Instruct model
     ]

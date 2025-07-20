@@ -106,7 +106,14 @@ def is_grok_model(model_name):
 
 def is_huggingface_model(model_name):
     """Check if model is a Hugging Face model"""
-    return "/" in model_name  # HF models use format like "meta-llama/Llama-2-7b-chat-hf"
+    working_models = [
+        'gpt2',  # Text generation
+        'distilbert-base-uncased-finetuned-sst-2-english',  # Sentiment analysis
+        'facebook/bart-large-cnn',  # Summarization
+        'bert-base-uncased',  # Fill-mask
+        'google/gemma-2-2b-it'  # Chat/Instruct model
+    ]
+    return model_name in working_models or "/" in model_name
 
 # Load Google Sheet with detailed logging
 def get_model_config():
@@ -297,7 +304,7 @@ def ask_ai(request: AIRequest, client_request: Request):
                      model_param=request.model,
                      prompt=request.prompt
                 )
-            elif is_huggingface_model(request.model):
+                elif is_huggingface_model(request.model):
                 logger.info("Using Hugging Face API")
                 ai_response = ask_huggingface(
                     api_key=api_key,
@@ -396,6 +403,7 @@ def api_health_check():
             "summary": {}
         }
 
+
 @app.get("/supported-models")
 def get_supported_models():
     """Get information about supported AI models"""
@@ -406,6 +414,6 @@ def get_supported_models():
         "deepseek_models": ["deepseek-chat", "deepseek-coder", "deepseek-reasoner"],
         "mistral_models": ["mistral-large-latest", "mistral-small-latest", "mixtral-8x7b-instruct"],
         "grok_models": ["grok-4", "grok-3", "grok-beta", "grok-2-vision-012"],
-        "huggingface_models": ["meta-llama/Llama-2-7b-chat-hf", "codellama/CodeLlama-7b-Instruct-hf", "HuggingFaceH4/zephyr-7b-beta"],  # NEW
+        "huggingface_models": ["gpt2", "distilbert-base-uncased-finetuned-sst-2-english", "facebook/bart-large-cnn"],  # NEW
         "note": "Add these models to your Google Sheet with appropriate API keys. Hugging Face offers 1000 free requests/month per model!"
     }
