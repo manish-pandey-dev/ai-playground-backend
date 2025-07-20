@@ -10,6 +10,8 @@ import json
 import time
 from collections import defaultdict
 from datetime import datetime, timedelta
+from health_checker import run_api_health_check
+from models.huggingface import ask_huggingface
 
 # Import your AI model modules
 from models.anthropic_claude import ask_claude
@@ -101,7 +103,11 @@ def is_mistral_model(model_name):
 def is_grok_model(model_name):
     """Check if model is a Grok model"""
     return model_name.startswith('grok-')
-    
+
+def is_huggingface_model(model_name):
+    """Check if model is a Hugging Face model"""
+    return "/" in model_name  # HF models use format like "meta-llama/Llama-2-7b-chat-hf"
+
 # Load Google Sheet with detailed logging
 def get_model_config():
     try:
@@ -290,7 +296,14 @@ def ask_ai(request: AIRequest, client_request: Request):
                      api_key=api_key,
                      model_param=request.model,
                      prompt=request.prompt
-                )                
+                )
+            elif is_huggingface_model(request.model):
+                logger.info("Using Hugging Face API")
+                ai_response = ask_huggingface(
+                    api_key=api_key,
+                    model_param=request.model,
+                    prompt=request.prompt
+                )
             else:
                 logger.warning(f"Unknown model type: {request.model}")
                 return {"error": f"Unsupported model type: {request.model}"}
@@ -342,10 +355,10 @@ def api_health_check():
     """
     try:
         logger.info("🔍 API Health Check requested")
-        
+
         # Run the health check
         health_results = run_api_health_check()
-        
+
         if not health_results["success"]:
             logger.error("Health check failed to complete")
             return {
@@ -354,19 +367,24 @@ def api_health_check():
                 "results": [],
                 "summary": {}
             }
-        
+
         results = health_results["results"]
         summary = health_results["summary"]
-        
+
         logger.info(f"Health check completed: {summary['successful']}/{summary['total_models']} models working")
-        
+
+        # Check if email was sent
+        email_status = "📧 Report sent to pandeyelectric@gmail.com" if health_results.get(
+            "email_sent") else "⚠️ Email not sent (check configuration)"
+
         return {
             "success": True,
             "results": results,
             "summary": summary,
-            "message": f"Health check completed: {summary['success_rate']}% models operational"
+            "email_sent": health_results.get("email_sent", False),
+            "message": f"Health check completed: {summary['success_rate']}% models operational. {email_status}"
         }
-        
+
     except Exception as e:
         logger.error(f"Error during health check: {str(e)}")
         import traceback
@@ -387,6 +405,7 @@ def get_supported_models():
         "gemini_models": ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-1.0-pro"],
         "deepseek_models": ["deepseek-chat", "deepseek-coder", "deepseek-reasoner"],
         "mistral_models": ["mistral-large-latest", "mistral-small-latest", "mixtral-8x7b-instruct"],
-        "grok_models": ["grok-4", "grok-3", "grok-beta", "grok-2-vision-012"],  # NEW
-        "note": "Add these models to your Google Sheet with appropriate API keys"
+        "grok_models": ["grok-4", "grok-3", "grok-beta", "grok-2-vision-012"],
+        "huggingface_models": ["meta-llama/Llama-2-7b-chat-hf", "codellama/CodeLlama-7b-Instruct-hf", "HuggingFaceH4/zephyr-7b-beta"],  # NEW
+        "note": "Add these models to your Google Sheet with appropriate API keys. Hugging Face offers 1000 free requests/month per model!"
     }
