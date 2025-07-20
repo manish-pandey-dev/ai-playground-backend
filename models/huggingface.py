@@ -131,29 +131,27 @@ def ask_huggingface(api_key, model_param, prompt, max_tokens=150):
 def is_huggingface_model(model_name):
     """Check if model is a Hugging Face model"""
     huggingface_models = [
-        'meta-llama/Llama-2-7b-chat-hf',
-        'meta-llama/Llama-2-13b-chat-hf',
-        'codellama/CodeLlama-7b-Instruct-hf',
-        'mistralai/Mixtral-8x7B-Instruct-v0.1',
         'microsoft/DialoGPT-medium',
         'HuggingFaceH4/zephyr-7b-beta',
         'microsoft/Phi-3-mini-4k-instruct',
         'Qwen/Qwen1.5-7B-Chat',
-        'google/flan-t5-large',
-        'bigscience/bloom-7b1'
+        'bigscience/bloom-560m',
+        'facebook/blenderbot-400M-distill',
+        'EleutherAI/gpt-neo-1.3B',
+        'google/flan-t5-base'
     ]
     return model_name in huggingface_models or "/" in model_name
 
 
 def get_huggingface_models():
-    """Get list of popular Hugging Face models"""
+    """Get list of popular Hugging Face models that work with Inference API"""
     return [
-        'meta-llama/Llama-2-7b-chat-hf',
-        'meta-llama/Llama-2-13b-chat-hf',
-        'codellama/CodeLlama-7b-Instruct-hf',
-        'mistralai/Mixtral-8x7B-Instruct-v0.1',
+        'microsoft/DialoGPT-medium',
         'HuggingFaceH4/zephyr-7b-beta',
         'microsoft/Phi-3-mini-4k-instruct',
         'Qwen/Qwen1.5-7B-Chat',
-        'google/flan-t5-large'
+        'bigscience/bloom-560m',
+        'facebook/blenderbot-400M-distill',
+        'EleutherAI/gpt-neo-1.3B',
+        'google/flan-t5-base'
     ]
